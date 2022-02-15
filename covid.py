@@ -47,8 +47,9 @@ def update_covid_data():
 	for i in range(1, len(df)):
 		daily_change.append(df.iloc[i]-df.iloc[i-1])
 
-	plt.figure(figsize=(11, 7))
+	plt.figure(figsize=(11, 5))
 	plt.plot(df.index[1:], daily_change)
 	plt.grid(True)
 	plt.title("Moscow daily cases")
 	plt.savefig('static/covid.png')
+	return pd.DataFrame(daily_change, index=df.index[1:])
