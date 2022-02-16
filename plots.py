@@ -104,9 +104,10 @@ def plotCoefficients(model, X_train):
     plt.hlines(y=0, xmin=0, xmax=len(coefs), linestyles="dashed")
     plt.savefig('static/{0:}_coefs.png'.format(str(model).split('(', 1)[0]))
 
-def plot_ml_predictions(data, model):
+def plot_ml_predictions(data, model, steps):
     plt.figure(figsize=(11, 5))
     plt.grid(True)
     plt.title(str(model).split('(', 1)[0])
     plt.plot(data)
     plt.axvspan(data.index[-steps], data.index[-1], alpha=0.5, color='lightgrey')
+    plt.savefig('static/{0:}_pred.png'.format(str(model).split('(', 1)[0]))

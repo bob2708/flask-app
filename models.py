@@ -1,3 +1,4 @@
+import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -26,20 +27,22 @@ def timeseries_train_test_split(X, y, test_size):
 def feature_extraction(df):
     data = pd.DataFrame(df.copy())
     data.columns = ["y"]
+    data = data.astype('int64')
 
     # Добавления значений лагов 4-24
     for i in range(4, 25):
         data["lag_{}".format(i)] = data.y.shift(i)
 
-    y = data.dropna().y
-    X = data.dropna().drop(["y"], axis=1)
-
-    return (X, y)
+    return data
     
 
 def training_models(df):
     # выделение 30% данных для теста
-    X, y = feature_extraction(df)
+    data = feature_extraction(df)
+
+    y = data.dropna().y
+    X = data.dropna().drop(["y"], axis=1)
+
     X_train, X_test, y_train, y_test = timeseries_train_test_split(X, y, test_size=0.3)
     
     # обучение моделей
@@ -56,14 +59,17 @@ def training_models(df):
     return ([lr, xgb, dt, rf], (X_train, X_test, y_train, y_test))
 
 # Вычисление предсказаний
-def calcPredicts(model, steps):
+def calc_predicts(data, model, steps):
     main = pd.DataFrame(data.copy())
     idxs=[]
     pylast = main.index[-1].to_pydatetime()
+    
     for i in range(steps):
         idxs.append(pylast + datetime.timedelta(days=1+i))
-    full = pd.concat([main, pd.DataFrame(index=idxs, columns=["lag_{}".format(i) for i in range(4, 25)])])
+    new = pd.DataFrame(index=idxs, columns=["lag_{}".format(i) for i in range(4, 25)]).astype('float64')
+    full = pd.concat([main, new])
     j = steps
+
     while(j>0):
         for i in range(4):
             if j == 0:

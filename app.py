@@ -1,8 +1,8 @@
 from flask import Flask, render_template, redirect, url_for, request
 from covid import update_covid_data
-from plots import plotMovingAverage, plotModelResults, plotCoefficients
+from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions
 from misc import handle_missing_values
-from models import training_models
+from models import training_models, calc_predicts, feature_extraction
 
 from sklearn.model_selection import TimeSeriesSplit
 
@@ -13,12 +13,16 @@ import numpy as np
 
 df = update_covid_data()
 df = handle_missing_values(df)
+models, data = training_models(df)
 app = Flask(__name__)
 
 def load_from_file(file):
 	global df
+	global models
+	global data
 	df = pd.read_csv(file, index_col=0, parse_dates=True)
 	df = handle_missing_values(df)
+	models, data = training_models(df)
 	plt.figure(figsize=(11, 5))
 	plt.plot(df)
 	plt.grid(True)
@@ -49,7 +53,9 @@ def load():
 
 @app.route('/models', methods=['GET', 'POST'])
 def model():
-	models, data = training_models(df)
+	global models
+	global data
+	#models, data = training_models(df)
 	tscv = TimeSeriesSplit(n_splits=5)
 	errors = []
 	for model in models:
@@ -63,24 +69,37 @@ def model():
 		)
 		# plotCoefficients(model, X_train=data[0])
 	best_model = models[errors.index(min(errors))]
-	best_model_name = str(best_model).split('(', 1)[0]
 	
-	models.remove(best_model)
+	best_model_idx = models.index(best_model)
+	if best_model_idx != 0:
+		models[best_model_idx], models[0] = models[0], models[best_model_idx]
 	
 	return render_template(
 		'models.html',
-		best_model='static/{0:}_res.png'.format(best_model_name),
-		models=['static/{0:}_res.png'.format(str(model).split('(', 1)[0]) for model in models]
+		best_model='static/{0:}_res.png'.format(str(models[0]).split('(', 1)[0]),
+		models=['static/{0:}_res.png'.format(str(model).split('(', 1)[0]) for model in models[1:]]
 	)
-	# steps = 90
-	# full = calcPredicts(model, steps)
-	# predictions = pd.DataFrame(full['y'][-steps:])
-	# predictions.columns = ["Russia_cases"]
-	# df_lr_predicted = df.append(predictions)
+	
 
-@app.route('/metrics', methods=['GET', 'POST'])
-def metric():
-	return '123'
+@app.route('/predictions', methods=['GET', 'POST'])
+def predictions():
+	#global models
+	steps = 90
+	data = feature_extraction(df)
+	for model in models:
+		full = calc_predicts(data, model, steps)
+		predictions = pd.DataFrame(full['y'][-steps:])
+		predictions.columns = ["Russia_cases"]
+		df.columns=['Russia_cases'] # Можно убрать и предсказания будут лучше видны (другой цвет)
+		df_predicted = df.append(predictions)
+		print(df_predicted[-93:-87])
+		plot_ml_predictions(df_predicted, model, steps)
+
+	return render_template(
+		'predictions.html',
+		best_model='static/{0:}_pred.png'.format(str(models[0]).split('(', 1)[0]),
+		models=['static/{0:}_pred.png'.format(str(model).split('(', 1)[0]) for model in models[1:]]
+	)
 
 if __name__ == "__main__":
 	app.run('127.0.0.1', 8800, True)
