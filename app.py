@@ -1,6 +1,6 @@
 from flask import Flask, render_template, redirect, url_for, request
 from covid import update_covid_data
-from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions
+from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions, basic_plot
 from misc import handle_missing_values
 from models import training_models, calc_predicts, feature_extraction
 
@@ -11,32 +11,47 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+prediction_steps = 30
+target_col = 0
+plot_anomalies = False
+plot_intervals = False
 df = update_covid_data()
 df = handle_missing_values(df)
 models, data = training_models(df)
 app = Flask(__name__)
 
 def load_from_file(file):
-	global df
-	global models
-	global data
+	global df, models, data, target_col
 	df = pd.read_csv(file, index_col=0, parse_dates=True)
 	df = handle_missing_values(df)
-	models, data = training_models(df)
-	plt.figure(figsize=(11, 5))
-	plt.plot(df)
-	plt.grid(True)
-	plt.title("Moscow daily COVID-19 cases")
-	plt.savefig('static/covid.png')
+	models, data = training_models(df, target_col)
+	basic_plot(df, target_col)
 
 @app.route('/')
 def index():
 	return redirect(url_for('home'))
 
-@app.route('/view')
+@app.route('/view', methods=['GET', 'POST'])
 def view():
-	plotMovingAverage(df, 14, plot_intervals=True, plot_anomalies=True)
-	return render_template('view.html', basic_img='static/covid.png', moving_avg_img='static/moving_avg.png')
+	global target_col, models, data
+	window_size = 14
+	max_number = ''
+	if len(df.columns) > 1:
+		max_number = str(len(df.columns))
+		if request.method == 'POST':
+			target_col = int(request.form['column']) - 1
+			models, data = training_models(df, target_col)
+			basic_plot(df, target_col)
+			window_size = int(request.form['window_size'])
+	else:
+		if request.method == 'POST':
+			window_size = int(request.form['window_size'])
+
+	plotMovingAverage(pd.DataFrame(df.iloc[:, target_col]), window_size, plot_intervals=True, plot_anomalies=True)
+	return render_template(
+		'view.html', basic_img='static/basic.png', moving_avg_img='static/moving_avg.png', 
+		cur_target=target_col+1, max_col=max_number, max_row=(df.shape[0]/5), window_size=window_size
+		)
 
 @app.route('/home')
 def home():
@@ -53,9 +68,10 @@ def load():
 
 @app.route('/models', methods=['GET', 'POST'])
 def model():
-	global models
-	global data
-	#models, data = training_models(df)
+	global models, data, plot_anomalies, plot_intervals
+	if request.method == 'POST':
+		plot_intervals = request.form.get('intervals')
+		plot_anomalies = request.form.get('anomalies')
 	tscv = TimeSeriesSplit(n_splits=5)
 	errors = []
 	for model in models:
@@ -63,8 +79,8 @@ def model():
 			model, 
 			X_train=data[0], X_test=data[1], 
 			y_train=data[2], y_test=data[3],
-			plot_anomalies=False,
-			plot_intervals=True,
+			plot_anomalies=plot_anomalies,
+			plot_intervals=plot_intervals,
 			tscv=tscv)
 		)
 		# plotCoefficients(model, X_train=data[0])
@@ -77,28 +93,27 @@ def model():
 	return render_template(
 		'models.html',
 		best_model='static/{0:}_res.png'.format(str(models[0]).split('(', 1)[0]),
-		models=['static/{0:}_res.png'.format(str(model).split('(', 1)[0]) for model in models[1:]]
+		models=['static/{0:}_res.png'.format(str(model).split('(', 1)[0]) for model in models[1:]],
+		checked=[plot_anomalies, plot_intervals]
 	)
-	
 
 @app.route('/predictions', methods=['GET', 'POST'])
 def predictions():
-	#global models
-	steps = 90
-	data = feature_extraction(df)
+	global prediction_steps
+	if request.method == 'POST':
+		prediction_steps = int(request.form['steps'])
+	data = feature_extraction(df, target_col)
 	for model in models:
-		full = calc_predicts(data, model, steps)
-		predictions = pd.DataFrame(full['y'][-steps:])
-		predictions.columns = ["Russia_cases"]
-		df.columns=['Russia_cases'] # Можно убрать и предсказания будут лучше видны (другой цвет)
-		df_predicted = df.append(predictions)
-		print(df_predicted[-93:-87])
-		plot_ml_predictions(df_predicted, model, steps)
+		full = calc_predicts(data, model, prediction_steps)
+		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(full['y'][-prediction_steps:]))
+		plot_ml_predictions(df_predicted, model, prediction_steps)
 
 	return render_template(
 		'predictions.html',
 		best_model='static/{0:}_pred.png'.format(str(models[0]).split('(', 1)[0]),
-		models=['static/{0:}_pred.png'.format(str(model).split('(', 1)[0]) for model in models[1:]]
+		models=['static/{0:}_pred.png'.format(str(model).split('(', 1)[0]) for model in models[1:]],
+		steps=prediction_steps,
+		max_steps=(df.shape[0]/3)
 	)
 
 if __name__ == "__main__":

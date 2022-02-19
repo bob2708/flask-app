@@ -8,6 +8,7 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from xgboost import XGBRegressor
 from sklearn import tree
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LassoCV
 
 def timeseries_train_test_split(X, y, test_size):
     """
@@ -24,10 +25,11 @@ def timeseries_train_test_split(X, y, test_size):
 
     return X_train, X_test, y_train, y_test
 
-def feature_extraction(df):
+def feature_extraction(df, col=0):
     data = pd.DataFrame(df.copy())
+    data = pd.DataFrame(data.iloc[:, col])
     data.columns = ["y"]
-    data = data.astype('int64')
+    # data = data.astype('int64')
 
     # Добавления значений лагов 4-24
     for i in range(4, 25):
@@ -36,9 +38,9 @@ def feature_extraction(df):
     return data
     
 
-def training_models(df):
+def training_models(df, col=0):
     # выделение 30% данных для теста
-    data = feature_extraction(df)
+    data = feature_extraction(df, col=col)
 
     y = data.dropna().y
     X = data.dropna().drop(["y"], axis=1)
@@ -46,7 +48,7 @@ def training_models(df):
     X_train, X_test, y_train, y_test = timeseries_train_test_split(X, y, test_size=0.3)
     
     # обучение моделей
-    lr = LinearRegression()
+    lr = LassoCV()
     xgb = XGBRegressor()
     dt = tree.DecisionTreeRegressor()
     rf = RandomForestRegressor()

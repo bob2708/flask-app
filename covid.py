@@ -51,5 +51,5 @@ def update_covid_data():
 	plt.plot(df.index[1:], daily_change)
 	plt.grid(True)
 	plt.title("Moscow daily cases")
-	plt.savefig('static/covid.png')
+	plt.savefig('static/basic.png')
 	return pd.DataFrame(daily_change, index=df.index[1:])

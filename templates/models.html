@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Models</h1>
+<form action="" method="post">
+	<input type="checkbox" name="anomalies" id="anomalies" {% if checked[0] == 'on' %} checked {% endif %}>
+	<label for="anomalies">Show anomalies</label>
+	<input type="checkbox" name="intervals" id="intervals" {% if checked[1] == 'on' %} checked {% endif %}>
+	<label for="intervals">Show intervals</label>
+	<input type="submit" value="Сохранить изменения" />
+</form>
 <h2>Best Model</h2>
 <img src={{ best_model }}>
 <h2>Other models</h2>

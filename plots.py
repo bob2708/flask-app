@@ -8,6 +8,13 @@ from sklearn.model_selection import cross_val_score
 def mean_absolute_percentage_error(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
+def basic_plot(df, target_col):
+    plt.figure(figsize=(11, 5))
+    plt.plot(pd.DataFrame(df.iloc[:, target_col]))
+    plt.grid(True)
+    plt.title(df.columns[target_col])
+    plt.savefig('static/basic.png')
+    
 def plotMovingAverage(series, window, plot_intervals=False, scale=1.96, plot_anomalies=False):
 
     """
@@ -16,7 +23,7 @@ def plotMovingAverage(series, window, plot_intervals=False, scale=1.96, plot_ano
         plot_intervals - show confidence intervals
         plot_anomalies - show anomalies 
     """
-
+    print(series)
     rolling_mean = series.rolling(window=window).mean()
 
     plt.figure(figsize=(11,5))

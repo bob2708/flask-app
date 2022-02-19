@@ -2,6 +2,19 @@
 
 {% block content %}
 <h1>Data</h1>
+
+<form action="" method="post">
+	{% if max_col %}
+		<p>Choose your target column.</p>
+		<label for="column">Feature:</label>
+		<input type="number" name="column" id="column" min="1" max="{{ max_col }}" value="{{ cur_target }}">
+		<br>
+	{% endif %}
+	<label for="window_size">Moving average window size:</label>
+	<input type="range" min="3", max="{{ max_row }}" value="{{ window_size }}" name="window_size" id="window_size" oninput="this.nextElementSibling.value = this.value" style="width: 20%">
+	<output>{{ window_size }}</output>
+	<input type="submit" value="Submit" />
+</form>
 <img src={{ basic_img }}>
 <h1>Moving Average</h1>
 <img src={{ moving_avg_img }}>
