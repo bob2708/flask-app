@@ -62,6 +62,9 @@ def plotModelResults(
     prediction = model.predict(X_test)
     prediction2 = model.predict(X_train)
 
+    prediction = prediction.reshape((prediction.shape[0]))
+    prediction2 = prediction2.reshape((prediction2.shape[0]))
+
     plt.figure(figsize=(11, 5))
     plt.plot(prediction, "g", label="prediction", linewidth=2.0)
     plt.plot(y_test.values, label="actual", linewidth=2.0)
@@ -88,11 +91,17 @@ def plotModelResults(
 
     error = mean_absolute_percentage_error(prediction, y_test)
     error2 = mean_absolute_percentage_error(prediction2, y_train)
-    plt.title("Mean absolute percentage error {1:.2f}%/{0:.2f}%\nfor {2:} (train/test)".format(error, error2, str(model).split('(', 1)[0]))
+    if 'sequential' not in str(model):
+        plt.title("Mean absolute percentage error {1:.2f}%/{0:.2f}%\nfor {2:} (train/test)".format(error, error2, str(model).split('(', 1)[0]))
+    else:
+        plt.title("Mean absolute percentage error {1:.2f}%/{0:.2f}% (train/test)".format(error, error2))
     plt.legend(loc="best")
     plt.tight_layout()
     plt.grid(True)
-    plt.savefig('static/{0:}_res.png'.format(str(model).split('(', 1)[0]))
+    if 'sequential' in str(model):
+        plt.savefig('static/lstm_res.png')
+    else:
+        plt.savefig('static/{0:}_res.png'.format(str(model).split('(', 1)[0]))
     return (error, error2)
 
 def plotCoefficients(model, X_train):
@@ -114,7 +123,10 @@ def plotCoefficients(model, X_train):
 def plot_ml_predictions(data, model, steps):
     plt.figure(figsize=(11, 5))
     plt.grid(True)
-    plt.title(str(model).split('(', 1)[0])
+    if 'sequential' not in str(model): plt.title(str(model).split('(', 1)[0])
     plt.plot(data)
     plt.axvspan(data.index[-steps], data.index[-1], alpha=0.5, color='lightgrey')
-    plt.savefig('static/{0:}_pred.png'.format(str(model).split('(', 1)[0]))
+    if 'sequential' in str(model):
+        plt.savefig('static/lstm_pred.png')
+    else:
+        plt.savefig('static/{0:}_pred.png'.format(str(model).split('(', 1)[0]))

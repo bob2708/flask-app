@@ -10,8 +10,10 @@
 </form>
 <h2>Best Model</h2>
 <img src={{ best_model }}>
+<h2>LSTM</h2>
+<img src='static/lstm_res.png'>
 <h2>Other models</h2>
-{% for model in models %}
+{% for model in models[:-1] %}
     <img src={{ model }}>
 {% endfor %}
 {% endblock %}

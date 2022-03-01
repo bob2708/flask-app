@@ -3,10 +3,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_absolute_error
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression
 
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 from xgboost import XGBRegressor
-from sklearn import tree
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LassoCV
 
@@ -46,19 +48,26 @@ def training_models(df, col=0):
     X = data.dropna().drop(["y"], axis=1)
 
     X_train, X_test, y_train, y_test = timeseries_train_test_split(X, y, test_size=0.3)
+    X_train_reshaped = X_train.values.reshape((X_train.shape[0], X_train.shape[1], 1))
     
     # обучение моделей
     lr = LassoCV()
     xgb = XGBRegressor()
-    dt = tree.DecisionTreeRegressor()
+    knn = KNeighborsRegressor(20)
     rf = RandomForestRegressor()
+
+    lstm = Sequential()
+    lstm.add(LSTM(50, activation='relu', input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2])))
+    lstm.add(Dense(1))
+    lstm.compile(optimizer='adam', loss='mse')
 
     lr.fit(X_train, y_train)
     xgb.fit(X_train, y_train)
-    dt.fit(X_train, y_train)
+    knn.fit(X_train, y_train)
     rf.fit(X_train, y_train)
+    lstm.fit(X_train_reshaped, y_train.values, epochs=200, verbose=0)
 
-    return ([lr, xgb, dt, rf], (X_train, X_test, y_train, y_test))
+    return ([lr, xgb, knn, rf, lstm], (X_train, X_test, y_train, y_test))
 
 # Вычисление предсказаний
 def calc_predicts(data, model, steps):
@@ -76,7 +85,7 @@ def calc_predicts(data, model, steps):
         for i in range(4):
             if j == 0:
                 pdctd = model.predict(full.iloc[-i:].drop(['y'], axis=1))
-                full['y'][-i:]=pdctd
+                full['y'][-i:]=pdctd.reshape((pdctd.shape[0]))
                 return full
             first = full.iloc[-j-1].shift(1)
             first[1] = full['y'].dropna()[i-4]
@@ -84,8 +93,8 @@ def calc_predicts(data, model, steps):
             j = j - 1
         if j == 0:
             pdctd = model.predict(full.iloc[-j-4:].drop(['y'], axis=1))
-            full['y'][-j-4:]=pdctd
+            full['y'][-j-4:]=pdctd.reshape((pdctd.shape[0]))
         else:
             pdctd = model.predict(full.iloc[-j-4:-j].drop(['y'], axis=1))
-            full['y'][-j-4:-j]=pdctd
+            full['y'][-j-4:-j]=pdctd.reshape((pdctd.shape[0]))
     return full

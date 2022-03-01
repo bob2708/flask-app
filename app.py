@@ -3,7 +3,7 @@ from covid import update_covid_data
 from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions, basic_plot
 from misc import handle_missing_values
 from models import training_models, calc_predicts, feature_extraction
-
+from statsmodels.tsa.seasonal import seasonal_decompose
 from sklearn.model_selection import TimeSeriesSplit
 
 import datetime
@@ -40,16 +40,22 @@ def view():
 		max_number = str(len(df.columns))
 		if request.method == 'POST':
 			target_col = int(request.form['column']) - 1
-			models, data = training_models(df, target_col)
+			#models, data = training_models(df, target_col)
 			basic_plot(df, target_col)
 			window_size = int(request.form['window_size'])
 	else:
 		if request.method == 'POST':
 			window_size = int(request.form['window_size'])
 
+	fig = seasonal_decompose(df.iloc[:, target_col]).plot(resid=False)
+	fig.set_figwidth(10)
+	fig.set_figheight(10)
+	fig.get_axes()[0].set_title('Seasonal/trend decompose')
+	plt.savefig('static/decompose.png')
+
 	plotMovingAverage(pd.DataFrame(df.iloc[:, target_col]), window_size, plot_intervals=True, plot_anomalies=True)
 	return render_template(
-		'view.html', basic_img='static/basic.png', moving_avg_img='static/moving_avg.png', 
+		'view.html', basic_img='static/basic.png', moving_avg_img='static/moving_avg.png', decompose_img = 'static/decompose.png',
 		cur_target=target_col+1, max_col=max_number, max_row=(df.shape[0]/5), window_size=window_size
 		)
 
@@ -84,7 +90,8 @@ def model():
 			tscv=tscv)
 		)
 		# plotCoefficients(model, X_train=data[0])
-	best_model = models[errors.index(min(errors))]
+
+	best_model = models[errors.index(min(errors[:-1]))]
 	
 	best_model_idx = models.index(best_model)
 	if best_model_idx != 0:
@@ -111,7 +118,7 @@ def predictions():
 	return render_template(
 		'predictions.html',
 		best_model='static/{0:}_pred.png'.format(str(models[0]).split('(', 1)[0]),
-		models=['static/{0:}_pred.png'.format(str(model).split('(', 1)[0]) for model in models[1:]],
+		models=['static/{0:}_pred.png'.format(str(model).split('(', 1)[0]) for model in models[1:-1]],
 		steps=prediction_steps,
 		max_steps=(df.shape[0]/3)
 	)
