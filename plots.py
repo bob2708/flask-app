@@ -52,24 +52,28 @@ def plotMovingAverage(series, window, plot_intervals=False, scale=1.96, plot_ano
     plt.savefig('static/moving_avg.png')
 
 def plotModelResults(
-    model, X_train, X_test, y_train, y_test, 
+    model, X_train, X_test, y_train, y_test, mean_std,
     tscv, plot_intervals=False, plot_anomalies=False
 ):
     """
         Plots modelled vs fact values, prediction intervals and anomalies
     """
 
-    prediction = model.predict(X_test)
-    prediction2 = model.predict(X_train)
+    prediction = model.predict(X_test) * mean_std[1][0] + mean_std[0][0]
+    prediction2 = model.predict(X_train) * mean_std[1][0] + mean_std[0][0]
 
     prediction = prediction.reshape((prediction.shape[0]))
     prediction2 = prediction2.reshape((prediction2.shape[0]))
+
+    X_train = X_train * mean_std[1][0] + mean_std[0][0]
+    y_test = y_test * mean_std[1][0] + mean_std[0][0]
+    y_train = y_train * mean_std[1][0] + mean_std[0][0]
 
     plt.figure(figsize=(11, 5))
     plt.plot(prediction, "g", label="prediction", linewidth=2.0)
     plt.plot(y_test.values, label="actual", linewidth=2.0)
 
-    if plot_intervals:
+    if plot_intervals and 'keras' not in str(model):
         cv = cross_val_score(
             model, X_train, y_train, cv=tscv, scoring="neg_mean_absolute_error"
         )
@@ -91,6 +95,7 @@ def plotModelResults(
 
     error = mean_absolute_percentage_error(prediction, y_test)
     error2 = mean_absolute_percentage_error(prediction2, y_train)
+
     if 'sequential' not in str(model):
         plt.title("Mean absolute percentage error {1:.2f}%/{0:.2f}%\nfor {2:} (train/test)".format(error, error2, str(model).split('(', 1)[0]))
     else:
@@ -125,7 +130,7 @@ def plot_ml_predictions(data, model, steps):
     plt.grid(True)
     if 'sequential' not in str(model): plt.title(str(model).split('(', 1)[0])
     plt.plot(data)
-    plt.axvspan(data.index[-steps], data.index[-1], alpha=0.5, color='lightgrey')
+    plt.axvspan(data.index[-steps], data.index[-1], alpha=0.5, color='silver')
     if 'sequential' in str(model):
         plt.savefig('static/lstm_pred.png')
     else:

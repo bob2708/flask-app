@@ -33,16 +33,22 @@ def feature_extraction(df, col=0):
     data.columns = ["y"]
     # data = data.astype('int64')
 
+    # Normalizing for Neural Networks
+
+    data_mean = data.mean(axis=0)
+    data_std = data.std(axis=0)
+    data = (data - data_mean) / data_std
+
     # Добавления значений лагов 4-24
-    for i in range(4, 25):
+    for i in range(1, 25):
         data["lag_{}".format(i)] = data.y.shift(i)
 
-    return data
+    return data, data_mean, data_std
     
 
 def training_models(df, col=0):
     # выделение 30% данных для теста
-    data = feature_extraction(df, col=col)
+    data, data_mean, data_std = feature_extraction(df, col=col)
 
     y = data.dropna().y
     X = data.dropna().drop(["y"], axis=1)
@@ -52,6 +58,7 @@ def training_models(df, col=0):
     
     # обучение моделей
     lr = LassoCV()
+    #lr = LinearRegression()
     xgb = XGBRegressor()
     knn = KNeighborsRegressor(20)
     rf = RandomForestRegressor()
@@ -65,9 +72,9 @@ def training_models(df, col=0):
     xgb.fit(X_train, y_train)
     knn.fit(X_train, y_train)
     rf.fit(X_train, y_train)
-    lstm.fit(X_train_reshaped, y_train.values, epochs=200, verbose=0)
+    lstm.fit(X_train_reshaped, y_train.values, epochs=200, verbose=0, validation_split=0.2)
 
-    return ([lr, xgb, knn, rf, lstm], (X_train, X_test, y_train, y_test))
+    return ([lr, xgb, knn, rf, lstm], (X_train, X_test, y_train, y_test), (data_mean, data_std))
 
 # Вычисление предсказаний
 def calc_predicts(data, model, steps):
@@ -77,7 +84,7 @@ def calc_predicts(data, model, steps):
     
     for i in range(steps):
         idxs.append(pylast + datetime.timedelta(days=1+i))
-    new = pd.DataFrame(index=idxs, columns=["lag_{}".format(i) for i in range(4, 25)]).astype('float64')
+    new = pd.DataFrame(index=idxs, columns=["lag_{}".format(i) for i in range(1, 25)]).astype('float64')
     full = pd.concat([main, new])
     j = steps
 

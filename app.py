@@ -13,18 +13,19 @@ import numpy as np
 
 prediction_steps = 30
 target_col = 0
+cur_col = 0
 plot_anomalies = False
 plot_intervals = False
 df = update_covid_data()
 df = handle_missing_values(df)
-models, data = training_models(df)
+models, data, mean_std = training_models(df)
 app = Flask(__name__)
 
 def load_from_file(file):
-	global df, models, data, target_col
+	global df, models, data, target_col, mean_std
 	df = pd.read_csv(file, index_col=0, parse_dates=True)
 	df = handle_missing_values(df)
-	models, data = training_models(df, target_col)
+	models, data, mean_std = training_models(df, target_col)
 	basic_plot(df, target_col)
 
 @app.route('/')
@@ -74,17 +75,21 @@ def load():
 
 @app.route('/models', methods=['GET', 'POST'])
 def model():
-	global models, data, plot_anomalies, plot_intervals
+	global models, data, plot_anomalies, plot_intervals, cur_col, mean_std
 	if request.method == 'POST':
 		plot_intervals = request.form.get('intervals')
 		plot_anomalies = request.form.get('anomalies')
 	tscv = TimeSeriesSplit(n_splits=5)
 	errors = []
+	if target_col != cur_col:
+		cur_col = target_col
+		models, data, mean_std = training_models(df, target_col)
 	for model in models:
 		errors.append(plotModelResults(
 			model, 
 			X_train=data[0], X_test=data[1], 
 			y_train=data[2], y_test=data[3],
+			mean_std = mean_std,
 			plot_anomalies=plot_anomalies,
 			plot_intervals=plot_intervals,
 			tscv=tscv)
@@ -97,6 +102,8 @@ def model():
 	if best_model_idx != 0:
 		models[best_model_idx], models[0] = models[0], models[best_model_idx]
 	
+	print(mean_std)
+
 	return render_template(
 		'models.html',
 		best_model='static/{0:}_res.png'.format(str(models[0]).split('(', 1)[0]),
@@ -109,10 +116,11 @@ def predictions():
 	global prediction_steps
 	if request.method == 'POST':
 		prediction_steps = int(request.form['steps'])
-	data = feature_extraction(df, target_col)
+	data, data_mean, data_std = feature_extraction(df, target_col)
 	for model in models:
 		full = calc_predicts(data, model, prediction_steps)
-		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(full['y'][-prediction_steps:]))
+		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(full['y'][-prediction_steps:]*data_std[0]+data_mean[0]))
+		print(df_predicted)
 		plot_ml_predictions(df_predicted, model, prediction_steps)
 
 	return render_template(
