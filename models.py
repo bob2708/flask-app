@@ -3,14 +3,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_absolute_error
-from sklearn.linear_model import LinearRegression
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from xgboost import XGBRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LassoCV
+from sklearn.linear_model import LassoCV, LinearRegression
+from elm import Extreme
 
 def timeseries_train_test_split(X, y, test_size):
     """
@@ -62,6 +62,7 @@ def training_models(df, col=0):
     xgb = XGBRegressor()
     knn = KNeighborsRegressor(20)
     rf = RandomForestRegressor()
+    elm = Extreme()
 
     lstm = Sequential()
     lstm.add(LSTM(50, activation='relu', input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2])))
@@ -72,9 +73,10 @@ def training_models(df, col=0):
     xgb.fit(X_train, y_train)
     knn.fit(X_train, y_train)
     rf.fit(X_train, y_train)
-    lstm.fit(X_train_reshaped, y_train.values, epochs=200, verbose=0, validation_split=0.2)
+    elm.fit(X_train, y_train)
+    lstm.fit(X_train_reshaped, y_train.values, epochs=100, verbose=0)
 
-    return ([lr, xgb, knn, rf, lstm], (X_train, X_test, y_train, y_test), (data_mean, data_std))
+    return ([lr, xgb, knn, rf, elm, lstm], (X_train, X_test, y_train, y_test), (data_mean, data_std))
 
 # Вычисление предсказаний
 def calc_predicts(data, model, steps):

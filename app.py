@@ -102,8 +102,6 @@ def model():
 	if best_model_idx != 0:
 		models[best_model_idx], models[0] = models[0], models[best_model_idx]
 	
-	print(mean_std)
-
 	return render_template(
 		'models.html',
 		best_model='static/{0:}_res.png'.format(str(models[0]).split('(', 1)[0]),

@@ -73,7 +73,7 @@ def plotModelResults(
     plt.plot(prediction, "g", label="prediction", linewidth=2.0)
     plt.plot(y_test.values, label="actual", linewidth=2.0)
 
-    if plot_intervals and 'keras' not in str(model):
+    if plot_intervals and ('keras' not in str(model)) and ('Extreme' not in str(model)):
         cv = cross_val_score(
             model, X_train, y_train, cv=tscv, scoring="neg_mean_absolute_error"
         )
