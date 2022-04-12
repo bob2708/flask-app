@@ -56,14 +56,15 @@ def training_models(df, col=0):
     X_train, X_test, y_train, y_test = timeseries_train_test_split(X, y, test_size=0.3)
     X_train_reshaped = X_train.values.reshape((X_train.shape[0], X_train.shape[1], 1))
     
-    # обучение моделей
+    # инициализация моделей
     lr = LassoCV()
-    #lr = LinearRegression()
     xgb = XGBRegressor()
     knn = KNeighborsRegressor(20)
     rf = RandomForestRegressor()
     elm = Extreme()
+    ens = LinearRegression()
 
+    # настройка нейронной сети
     lstm = Sequential()
     lstm.add(LSTM(50, activation='relu', input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2])))
     lstm.add(Dense(1))
@@ -76,7 +77,17 @@ def training_models(df, col=0):
     elm.fit(X_train, y_train)
     lstm.fit(X_train_reshaped, y_train.values, epochs=100, verbose=0)
 
-    return ([lr, xgb, knn, rf, elm, lstm], (X_train, X_test, y_train, y_test), (data_mean, data_std))
+    # составление ансамбля моделей
+    ensemble = pd.DataFrame(y_test)
+
+    for model in [lr, xgb, knn, rf, elm]:
+        ensemble[str(model).split('(')[0]]=model.predict(X_test)
+
+    X_ens = ensemble.dropna().drop(["y"], axis=1)
+    y_ens = ensemble.dropna().y
+    ens.fit(X_ens, y_ens)
+
+    return ([ens, lr, xgb, knn, rf, elm, lstm], (X_train, X_test, y_train, y_test), (data_mean, data_std))
 
 # Вычисление предсказаний
 def calc_predicts(data, model, steps):

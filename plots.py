@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import cross_val_score
 
 
@@ -16,14 +16,6 @@ def basic_plot(df, target_col):
     plt.savefig('static/basic.png')
     
 def plotMovingAverage(series, window, plot_intervals=False, scale=1.96, plot_anomalies=False):
-
-    """
-        series - dataframe with timeseries
-        window - rolling window size 
-        plot_intervals - show confidence intervals
-        plot_anomalies - show anomalies 
-    """
-    print(series)
     rolling_mean = series.rolling(window=window).mean()
 
     plt.figure(figsize=(11,5))
@@ -59,11 +51,14 @@ def plotModelResults(
         Plots modelled vs fact values, prediction intervals and anomalies
     """
 
-    prediction = model.predict(X_test) * mean_std[1][0] + mean_std[0][0]
-    prediction2 = model.predict(X_train) * mean_std[1][0] + mean_std[0][0]
+    prediction_unscaled = model.predict(X_test)
+    prediction2_unscaled = model.predict(X_train)
+    
+    prediction = prediction_unscaled * mean_std[1][0] + mean_std[0][0]
+    prediction2 = prediction2_unscaled * mean_std[1][0] + mean_std[0][0]
 
-    prediction = prediction.reshape((prediction.shape[0]))
-    prediction2 = prediction2.reshape((prediction2.shape[0]))
+    prediction = prediction.reshape((prediction_unscaled.shape[0]))
+    prediction2 = prediction2.reshape((prediction2_unscaled.shape[0]))
 
     X_train = X_train * mean_std[1][0] + mean_std[0][0]
     y_test = y_test * mean_std[1][0] + mean_std[0][0]
@@ -95,11 +90,25 @@ def plotModelResults(
 
     error = mean_absolute_percentage_error(prediction, y_test)
     error2 = mean_absolute_percentage_error(prediction2, y_train)
+    rmse = mean_squared_error(prediction, y_test, squared=False)
+    rmse2 = mean_squared_error(prediction2, y_train, squared=False)
 
     if 'sequential' not in str(model):
-        plt.title("Mean absolute percentage error {1:.2f}%/{0:.2f}%\nfor {2:} (train/test)".format(error, error2, str(model).split('(', 1)[0]))
+        plt.title(
+            """
+            Mean absolute percentage error {1:.2f}%/{0:.2f}%\n 
+            Routed mean squared error {2:.2f}/{3:.2f}\n 
+            for {4:} (train/test)
+            """.format(error, error2, rmse2, rmse, str(model).split('(', 1)[0])
+            )
     else:
-        plt.title("Mean absolute percentage error {1:.2f}%/{0:.2f}% (train/test)".format(error, error2))
+        plt.title(
+            """
+            Mean absolute percentage error {1:.2f}%/{0:.2f}%\n
+            Routed mean squared error {2:.2f}/{3:.2f} (train/test)
+            """.format(error, error2, rmse2, rmse)
+            )
+
     plt.legend(loc="best")
     plt.tight_layout()
     plt.grid(True)
@@ -107,18 +116,13 @@ def plotModelResults(
         plt.savefig('static/lstm_res.png')
     else:
         plt.savefig('static/{0:}_res.png'.format(str(model).split('(', 1)[0]))
-    return (error, error2)
+    return (error, error2), (prediction_unscaled, prediction2_unscaled)
 
 def plotCoefficients(model, X_train):
-    """
-        Plots sorted coefficient values of the model
-    """
-
     coefs = pd.DataFrame(model.coef_, X_train.columns)
     coefs.columns = ["coef"]
     coefs["abs"] = coefs.coef.apply(np.abs)
     coefs = coefs.sort_values(by="abs", ascending=False).drop(["abs"], axis=1)
-
     plt.figure(figsize=(11, 5))
     coefs.coef.plot(kind="bar")
     plt.grid(True, axis="y")

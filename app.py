@@ -19,6 +19,7 @@ plot_intervals = False
 df = update_covid_data()
 df = handle_missing_values(df)
 models, data, mean_std = training_models(df)
+print(models[0])
 app = Flask(__name__)
 
 def load_from_file(file):
@@ -81,11 +82,18 @@ def model():
 		plot_anomalies = request.form.get('anomalies')
 	tscv = TimeSeriesSplit(n_splits=5)
 	errors = []
+	ens_train_df = pd.DataFrame()
+	ens_test_df = pd.DataFrame()
 	if target_col != cur_col:
 		cur_col = target_col
 		models, data, mean_std = training_models(df, target_col)
+	
+	idx = 0
 	for model in models:
-		errors.append(plotModelResults(
+		if 'Linear' in str(model):
+			ens_idx = idx
+			continue
+		error, prediction = plotModelResults(
 			model, 
 			X_train=data[0], X_test=data[1], 
 			y_train=data[2], y_test=data[3],
@@ -93,11 +101,21 @@ def model():
 			plot_anomalies=plot_anomalies,
 			plot_intervals=plot_intervals,
 			tscv=tscv)
+		errors.append(error)
+		ens_train_df[str(model).split('(')[0]] = prediction[1]
+		ens_test_df[str(model).split('(')[0]] = prediction[0]
+		idx += 1
+	
+	errors.insert(0, 
+		plotModelResults(
+			models[ens_idx], 
+			X_train=ens_train_df.iloc[:, :-1], X_test=ens_test_df.iloc[:, :-1], 
+			y_train=data[2], y_test=data[3], 
+			mean_std = mean_std, tscv=tscv
+			)[0]
 		)
-		# plotCoefficients(model, X_train=data[0])
 
 	best_model = models[errors.index(min(errors[:-1]))]
-	
 	best_model_idx = models.index(best_model)
 	if best_model_idx != 0:
 		models[best_model_idx], models[0] = models[0], models[best_model_idx]
@@ -115,11 +133,24 @@ def predictions():
 	if request.method == 'POST':
 		prediction_steps = int(request.form['steps'])
 	data, data_mean, data_std = feature_extraction(df, target_col)
+	predictions = pd.DataFrame()
+	idx = 0
 	for model in models:
+		if 'Linear' in str(model):
+			ens_idx = idx
+			continue
 		full = calc_predicts(data, model, prediction_steps)
-		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(full['y'][-prediction_steps:]*data_std[0]+data_mean[0]))
-		print(df_predicted)
+		prediction = full['y'][-prediction_steps:]*data_std[0]+data_mean[0]
+		predictions[str(model).split('(')[0]] = prediction
+		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(prediction))
 		plot_ml_predictions(df_predicted, model, prediction_steps)
+		idx += 1
+	
+	prediction = models[ens_idx].predict(predictions.iloc[:, :-1])
+	print(prediction)
+	df_predicted = pd.DataFrame(df.iloc[:, target_col].append(pd.Series(prediction, index=predictions.index)))
+
+	plot_ml_predictions(df_predicted, models[ens_idx], prediction_steps)
 
 	return render_template(
 		'predictions.html',
