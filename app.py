@@ -2,7 +2,7 @@ from flask import Flask, render_template, redirect, url_for, request
 from covid import update_covid_data
 from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions, basic_plot
 from misc import handle_missing_values
-from models import training_models, calc_predicts, feature_extraction
+from models import training_models, calc_predicts, feature_extraction, train_lr_mult
 from statsmodels.tsa.seasonal import seasonal_decompose
 from sklearn.model_selection import TimeSeriesSplit
 
@@ -109,7 +109,7 @@ def model():
 	errors.insert(0, 
 		plotModelResults(
 			models[ens_idx], 
-			X_train=ens_train_df.iloc[:, :-1], X_test=ens_test_df.iloc[:, :-1], 
+			X_train=ens_train_df, X_test=ens_test_df, 
 			y_train=data[2], y_test=data[3], 
 			mean_std = mean_std, tscv=tscv
 			)[0]
@@ -146,11 +146,33 @@ def predictions():
 		plot_ml_predictions(df_predicted, model, prediction_steps)
 		idx += 1
 	
-	prediction = models[ens_idx].predict(predictions.iloc[:, :-1])
+	# Ensemble prediction
+	prediction = models[ens_idx].predict(predictions)
 	print(prediction)
 	df_predicted = pd.DataFrame(df.iloc[:, target_col].append(pd.Series(prediction, index=predictions.index)))
 
 	plot_ml_predictions(df_predicted, models[ens_idx], prediction_steps)
+	
+	# Multivariate predictions
+	all_predictions = pd.DataFrame()
+	for col in range(df.shape[1]):
+		data, data_mean, data_std = feature_extraction(df, col)
+		full = calc_predicts(data, models[1], prediction_steps)
+		prediction = full['y'][-prediction_steps:]*data_std[0]+data_mean[0]
+		all_predictions[df.columns[col]] = prediction
+
+	print(df)
+	print('-'*50)
+	print(all_predictions)
+
+	if df.shape[1] > 1:
+		lr = train_lr_mult(df, target_col)
+		all_predictions = all_predictions.drop([all_predictions.columns[target_col]], axis=1)
+		mult_pred = lr.predict(all_predictions)
+		print('-'*50)
+		print(mult_pred)
+		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(pd.Series(mult_pred, index=predictions.index)))
+		plot_ml_predictions(df_predicted, 'mult_lr()', prediction_steps)
 
 	return render_template(
 		'predictions.html',

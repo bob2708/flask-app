@@ -45,7 +45,6 @@ def feature_extraction(df, col=0):
 
     return data, data_mean, data_std
     
-
 def training_models(df, col=0):
     # выделение 30% данных для теста
     data, data_mean, data_std = feature_extraction(df, col=col)
@@ -80,7 +79,7 @@ def training_models(df, col=0):
     # составление ансамбля моделей
     ensemble = pd.DataFrame(y_test)
 
-    for model in [lr, xgb, knn, rf, elm]:
+    for model in [lr, xgb, knn, rf, elm, lstm]:
         ensemble[str(model).split('(')[0]]=model.predict(X_test)
 
     X_ens = ensemble.dropna().drop(["y"], axis=1)
@@ -88,6 +87,17 @@ def training_models(df, col=0):
     ens.fit(X_ens, y_ens)
 
     return ([ens, lr, xgb, knn, rf, elm, lstm], (X_train, X_test, y_train, y_test), (data_mean, data_std))
+
+def train_lr_mult(df, target_col):
+    y = df.dropna()[df.columns[target_col]]
+    X = df.dropna().drop([df.columns[target_col]], axis=1)
+
+    X_train, X_test, y_train, y_test = timeseries_train_test_split(X, y, test_size=0.3)
+    lr = LassoCV()
+    lr.fit(X_train, y_train)
+    
+    return lr
+
 
 # Вычисление предсказаний
 def calc_predicts(data, model, steps):
