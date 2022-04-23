@@ -1,10 +1,11 @@
 from flask import Flask, render_template, redirect, url_for, request
 from covid import update_covid_data
-from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions, basic_plot
+from plots import plotMovingAverage, plotModelResults, plotCoefficients, plot_ml_predictions, basic_plot, mean_absolute_percentage_error
 from misc import handle_missing_values
 from models import training_models, calc_predicts, feature_extraction, train_lr_mult
 from statsmodels.tsa.seasonal import seasonal_decompose
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_squared_error
 
 import datetime
 import matplotlib.pyplot as plt
@@ -23,11 +24,13 @@ print(models[0])
 app = Flask(__name__)
 
 def load_from_file(file):
-	global df, models, data, target_col, mean_std
+	global df, models, mult, mult_data, data, target_col, mean_std
 	df = pd.read_csv(file, index_col=0, parse_dates=True)
 	df = handle_missing_values(df)
 	models, data, mean_std = training_models(df, target_col)
 	basic_plot(df, target_col)
+	if df.shape[1] > 1:
+		mult, mult_data = train_lr_mult(df, target_col)
 
 @app.route('/')
 def index():
@@ -76,7 +79,7 @@ def load():
 
 @app.route('/models', methods=['GET', 'POST'])
 def model():
-	global models, data, plot_anomalies, plot_intervals, cur_col, mean_std
+	global models, mult, data, mult_data, plot_anomalies, plot_intervals, cur_col, mean_std
 	if request.method == 'POST':
 		plot_intervals = request.form.get('intervals')
 		plot_anomalies = request.form.get('anomalies')
@@ -87,6 +90,8 @@ def model():
 	if target_col != cur_col:
 		cur_col = target_col
 		models, data, mean_std = training_models(df, target_col)
+		if df.shape[1] > 1:
+			mult, mult_data = train_lr_mult(df, target_col)
 	
 	idx = 0
 	for model in models:
@@ -106,6 +111,19 @@ def model():
 		ens_test_df[str(model).split('(')[0]] = prediction[0]
 		idx += 1
 	
+	if df.shape[1] > 1:
+		#mult, mult_data = train_lr_mult(df, target_col)
+
+		error, prediction = plotModelResults(
+			mult, 
+			X_train=mult_data[0], X_test=mult_data[1], 
+			y_train=mult_data[2], y_test=mult_data[3],
+			mean_std = ([0], [1]),
+			plot_anomalies=plot_anomalies,
+			plot_intervals=plot_intervals,
+			tscv=tscv, name='Multivariate model'
+			)
+
 	errors.insert(0, 
 		plotModelResults(
 			models[ens_idx], 
@@ -124,22 +142,34 @@ def model():
 		'models.html',
 		best_model='static/{0:}_res.png'.format(str(models[0]).split('(', 1)[0]),
 		models=['static/{0:}_res.png'.format(str(model).split('(', 1)[0]) for model in models[1:]],
+		mult_model='static/Multivariate model_res.png' if df.shape[1]>1 else '',
 		checked=[plot_anomalies, plot_intervals]
 	)
 
 @app.route('/predictions', methods=['GET', 'POST'])
 def predictions():
-	global prediction_steps
+	global prediction_steps, cur_col, target_col, models, mult, mult_data, data, mean_std
 	if request.method == 'POST':
 		prediction_steps = int(request.form['steps'])
-	data, data_mean, data_std = feature_extraction(df, target_col)
+
+	if target_col != cur_col:
+		cur_col = target_col
+		models, data, mean_std = training_models(df, target_col)
+		if df.shape[1] > 1:
+			mult, mult_data = train_lr_mult(df, target_col)
+
+	col_data, data_mean, data_std = feature_extraction(df, target_col)
 	predictions = pd.DataFrame()
-	idx = 0
+	idx, lasso_idx = 0, 0
 	for model in models:
 		if 'Linear' in str(model):
 			ens_idx = idx
+			idx += 1
 			continue
-		full = calc_predicts(data, model, prediction_steps)
+		elif 'Lasso' in str(model):
+			lasso_idx = idx
+
+		full = calc_predicts(col_data, model, prediction_steps)
 		prediction = full['y'][-prediction_steps:]*data_std[0]+data_mean[0]
 		predictions[str(model).split('(')[0]] = prediction
 		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(prediction))
@@ -148,7 +178,6 @@ def predictions():
 	
 	# Ensemble prediction
 	prediction = models[ens_idx].predict(predictions)
-	print(prediction)
 	df_predicted = pd.DataFrame(df.iloc[:, target_col].append(pd.Series(prediction, index=predictions.index)))
 
 	plot_ml_predictions(df_predicted, models[ens_idx], prediction_steps)
@@ -156,28 +185,24 @@ def predictions():
 	# Multivariate predictions
 	all_predictions = pd.DataFrame()
 	for col in range(df.shape[1]):
-		data, data_mean, data_std = feature_extraction(df, col)
-		full = calc_predicts(data, models[1], prediction_steps)
+		col_data, data_mean, data_std = feature_extraction(df, col)
+		print(models[lasso_idx])
+		print(models)
+		full = calc_predicts(col_data, models[lasso_idx], prediction_steps)
 		prediction = full['y'][-prediction_steps:]*data_std[0]+data_mean[0]
 		all_predictions[df.columns[col]] = prediction
 
-	print(df)
-	print('-'*50)
-	print(all_predictions)
-
 	if df.shape[1] > 1:
-		lr = train_lr_mult(df, target_col)
 		all_predictions = all_predictions.drop([all_predictions.columns[target_col]], axis=1)
-		mult_pred = lr.predict(all_predictions)
-		print('-'*50)
-		print(mult_pred)
+		mult_pred = mult.predict(all_predictions)
 		df_predicted = pd.DataFrame(df.iloc[:, target_col].append(pd.Series(mult_pred, index=predictions.index)))
-		plot_ml_predictions(df_predicted, 'mult_lr()', prediction_steps)
+		plot_ml_predictions(df_predicted, 'Multivariate model()', prediction_steps)
 
 	return render_template(
 		'predictions.html',
 		best_model='static/{0:}_pred.png'.format(str(models[0]).split('(', 1)[0]),
 		models=['static/{0:}_pred.png'.format(str(model).split('(', 1)[0]) for model in models[1:-1]],
+		mult_model='static/Multivariate model_pred.png' if df.shape[1]>1 else '',
 		steps=prediction_steps,
 		max_steps=(df.shape[0]/3)
 	)

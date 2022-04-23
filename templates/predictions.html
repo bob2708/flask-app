@@ -16,4 +16,7 @@
 {% for model in models %}
     <img src={{ model }}>
 {% endfor %}
+{% if mult_model != '' %}
+<img src='static/Multivariate model_pred.png'>
+{% endif %}
 {% endblock %}

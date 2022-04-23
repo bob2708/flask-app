@@ -45,7 +45,7 @@ def plotMovingAverage(series, window, plot_intervals=False, scale=1.96, plot_ano
 
 def plotModelResults(
     model, X_train, X_test, y_train, y_test, mean_std,
-    tscv, plot_intervals=False, plot_anomalies=False
+    tscv, plot_intervals=False, plot_anomalies=False, name=''
 ):
     """
         Plots modelled vs fact values, prediction intervals and anomalies
@@ -93,7 +93,23 @@ def plotModelResults(
     rmse = mean_squared_error(prediction, y_test, squared=False)
     rmse2 = mean_squared_error(prediction2, y_train, squared=False)
 
-    if 'sequential' not in str(model):
+    if name:
+        plt.title(
+            """
+            Mean absolute percentage error {1:.2f}%/{0:.2f}%\n 
+            Routed mean squared error {2:.2f}/{3:.2f}\n 
+            for {4:} (train/test)
+            """.format(error, error2, rmse2, rmse, name)
+            )
+    elif 'Linear' in str(model):
+        plt.title(
+            """
+            Mean absolute percentage error {1:.2f}%/{0:.2f}%\n 
+            Routed mean squared error {2:.2f}/{3:.2f}\n 
+            for {4:} (train/test)
+            """.format(error, error2, rmse2, rmse, 'Models ensemble')
+            )
+    elif 'sequential' not in str(model):
         plt.title(
             """
             Mean absolute percentage error {1:.2f}%/{0:.2f}%\n 
@@ -112,7 +128,10 @@ def plotModelResults(
     plt.legend(loc="best")
     plt.tight_layout()
     plt.grid(True)
-    if 'sequential' in str(model):
+
+    if name:
+        plt.savefig(f'static/{name}_res.png')
+    elif 'sequential' in str(model):
         plt.savefig('static/lstm_res.png')
     else:
         plt.savefig('static/{0:}_res.png'.format(str(model).split('(', 1)[0]))
@@ -132,7 +151,10 @@ def plotCoefficients(model, X_train):
 def plot_ml_predictions(data, model, steps):
     plt.figure(figsize=(11, 5))
     plt.grid(True)
-    if 'sequential' not in str(model): plt.title(str(model).split('(', 1)[0])
+    if 'Linear' in str(model):
+        plt.title('Models ensemble')
+    elif 'sequential' not in str(model): 
+        plt.title(str(model).split('(', 1)[0])
     plt.plot(data)
     plt.axvspan(data.index[-steps], data.index[-1], alpha=0.5, color='silver')
     if 'sequential' in str(model):

@@ -96,7 +96,7 @@ def train_lr_mult(df, target_col):
     lr = LassoCV()
     lr.fit(X_train, y_train)
     
-    return lr
+    return lr, [X_train, X_test, y_train, y_test]
 
 
 # Вычисление предсказаний
