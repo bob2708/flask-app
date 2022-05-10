@@ -20,7 +20,6 @@ plot_intervals = False
 df = update_covid_data()
 df = handle_missing_values(df)
 models, data, mean_std = training_models(df)
-print(models[0])
 app = Flask(__name__)
 
 def load_from_file(file):
@@ -45,7 +44,6 @@ def view():
 		max_number = str(len(df.columns))
 		if request.method == 'POST':
 			target_col = int(request.form['column']) - 1
-			#models, data = training_models(df, target_col)
 			basic_plot(df, target_col)
 			window_size = int(request.form['window_size'])
 	else:
@@ -62,11 +60,11 @@ def view():
 	return render_template(
 		'view.html', basic_img='static/basic.png', moving_avg_img='static/moving_avg.png', decompose_img = 'static/decompose.png',
 		cur_target=target_col+1, max_col=max_number, max_row=(df.shape[0]/5), window_size=window_size
-		)
+	)
 
 @app.route('/home')
 def home():
-	return render_template('base.html')
+	return render_template('home.html')
 
 @app.route('/load', methods=['GET', 'POST'])
 def load():
@@ -80,19 +78,24 @@ def load():
 @app.route('/models', methods=['GET', 'POST'])
 def model():
 	global models, mult, data, mult_data, plot_anomalies, plot_intervals, cur_col, mean_std
+	
 	if request.method == 'POST':
 		plot_intervals = request.form.get('intervals')
 		plot_anomalies = request.form.get('anomalies')
+	
 	tscv = TimeSeriesSplit(n_splits=5)
 	errors = []
 	ens_train_df = pd.DataFrame()
 	ens_test_df = pd.DataFrame()
+	
+	# Update column if changed
 	if target_col != cur_col:
 		cur_col = target_col
 		models, data, mean_std = training_models(df, target_col)
 		if df.shape[1] > 1:
 			mult, mult_data = train_lr_mult(df, target_col)
 	
+	# Bulid all models (except multivariate and emsemble)
 	idx = 0
 	for model in models:
 		if 'Linear' in str(model):
@@ -111,9 +114,8 @@ def model():
 		ens_test_df[str(model).split('(')[0]] = prediction[0]
 		idx += 1
 	
+	# Bulid multivariate model if possible
 	if df.shape[1] > 1:
-		#mult, mult_data = train_lr_mult(df, target_col)
-
 		error, prediction = plotModelResults(
 			mult, 
 			X_train=mult_data[0], X_test=mult_data[1], 
@@ -122,17 +124,19 @@ def model():
 			plot_anomalies=plot_anomalies,
 			plot_intervals=plot_intervals,
 			tscv=tscv, name='Multivariate model'
-			)
+		)
 
+	# Bulid ensemble model
 	errors.insert(0, 
 		plotModelResults(
 			models[ens_idx], 
-			X_train=ens_train_df, X_test=ens_test_df, 
+			X_train=ens_train_df.iloc[:, :-1], X_test=ens_test_df.iloc[:, :-1], 
 			y_train=data[2], y_test=data[3], 
 			mean_std = mean_std, tscv=tscv
 			)[0]
 		)
 
+	# Choose the best model
 	best_model = models[errors.index(min(errors[:-1]))]
 	best_model_idx = models.index(best_model)
 	if best_model_idx != 0:
@@ -152,12 +156,14 @@ def predictions():
 	if request.method == 'POST':
 		prediction_steps = int(request.form['steps'])
 
+	# Update column if changed
 	if target_col != cur_col:
 		cur_col = target_col
 		models, data, mean_std = training_models(df, target_col)
 		if df.shape[1] > 1:
 			mult, mult_data = train_lr_mult(df, target_col)
 
+	# Calculate predictions (except multivariate and ensemble)
 	col_data, data_mean, data_std = feature_extraction(df, target_col)
 	predictions = pd.DataFrame()
 	idx, lasso_idx = 0, 0
@@ -177,12 +183,12 @@ def predictions():
 		idx += 1
 	
 	# Ensemble prediction
-	prediction = models[ens_idx].predict(predictions)
+	prediction = models[ens_idx].predict(predictions.iloc[:, :-1])
 	df_predicted = pd.DataFrame(df.iloc[:, target_col].append(pd.Series(prediction, index=predictions.index)))
 
 	plot_ml_predictions(df_predicted, models[ens_idx], prediction_steps)
 	
-	# Multivariate predictions
+	# Collect predictions on all columns
 	all_predictions = pd.DataFrame()
 	for col in range(df.shape[1]):
 		col_data, data_mean, data_std = feature_extraction(df, col)
@@ -192,6 +198,7 @@ def predictions():
 		prediction = full['y'][-prediction_steps:]*data_std[0]+data_mean[0]
 		all_predictions[df.columns[col]] = prediction
 
+	# Multivariate prediction if possible
 	if df.shape[1] > 1:
 		all_predictions = all_predictions.drop([all_predictions.columns[target_col]], axis=1)
 		mult_pred = mult.predict(all_predictions)

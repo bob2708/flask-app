@@ -13,11 +13,8 @@ from sklearn.linear_model import LassoCV, LinearRegression
 from elm import Extreme
 
 def timeseries_train_test_split(X, y, test_size):
-    """
-        Perform train-test split with respect to time series structure
-    """
-
-    # индекс с которого начинается тестовая часть
+    
+    # Test part start index
     test_index = int(len(X) * (1 - test_size))
 
     X_train = X.iloc[:test_index]
@@ -28,25 +25,24 @@ def timeseries_train_test_split(X, y, test_size):
     return X_train, X_test, y_train, y_test
 
 def feature_extraction(df, col=0):
+    
     data = pd.DataFrame(df.copy())
     data = pd.DataFrame(data.iloc[:, col])
     data.columns = ["y"]
-    # data = data.astype('int64')
 
-    # Normalizing for Neural Networks
-
+    # Normalizing
     data_mean = data.mean(axis=0)
     data_std = data.std(axis=0)
     data = (data - data_mean) / data_std
 
-    # Добавления значений лагов 4-24
+    # Add lags 1-24
     for i in range(1, 25):
         data["lag_{}".format(i)] = data.y.shift(i)
 
     return data, data_mean, data_std
     
 def training_models(df, col=0):
-    # выделение 30% данных для теста
+    
     data, data_mean, data_std = feature_extraction(df, col=col)
 
     y = data.dropna().y
@@ -55,7 +51,7 @@ def training_models(df, col=0):
     X_train, X_test, y_train, y_test = timeseries_train_test_split(X, y, test_size=0.3)
     X_train_reshaped = X_train.values.reshape((X_train.shape[0], X_train.shape[1], 1))
     
-    # инициализация моделей
+    # Models init
     lr = LassoCV()
     xgb = XGBRegressor()
     knn = KNeighborsRegressor(20)
@@ -63,7 +59,7 @@ def training_models(df, col=0):
     elm = Extreme()
     ens = LinearRegression()
 
-    # настройка нейронной сети
+    # LSTM model
     lstm = Sequential()
     lstm.add(LSTM(50, activation='relu', input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2])))
     lstm.add(Dense(1))
@@ -76,10 +72,10 @@ def training_models(df, col=0):
     elm.fit(X_train, y_train)
     lstm.fit(X_train_reshaped, y_train.values, epochs=100, verbose=0)
 
-    # составление ансамбля моделей
+    # Ensemble model (stacking with LinearRegression)
     ensemble = pd.DataFrame(y_test)
 
-    for model in [lr, xgb, knn, rf, elm, lstm]:
+    for model in [lr, xgb, knn, rf, elm]:
         ensemble[str(model).split('(')[0]]=model.predict(X_test)
 
     X_ens = ensemble.dropna().drop(["y"], axis=1)
@@ -99,7 +95,7 @@ def train_lr_mult(df, target_col):
     return lr, [X_train, X_test, y_train, y_test]
 
 
-# Вычисление предсказаний
+# Calculating predictions
 def calc_predicts(data, model, steps):
     main = pd.DataFrame(data.copy())
     idxs=[]

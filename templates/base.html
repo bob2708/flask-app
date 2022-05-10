@@ -7,29 +7,24 @@
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-
-  <!-- Добавление дополнительного статического CSS файла -->
 </head>
 
 <body>
-
   <div class="container-fluid">
-
     <div class="row">
       <div class="col-sm-2">
       <ul class="sidebar-nav">
-        <li><a href="{{ url_for('index') }}">Home</a></li>
-        <li><a href="{{ url_for('view') }}">View</a></li>
-        <li><a href="{{ url_for('load') }}">Load</a></li>
-        <li><a href="{{ url_for('model') }}">Models</a></li>
-        <li><a href="{{ url_for('predictions') }}">Predictions</a></li>
+        <a href="{{ url_for('index') }}">Home</a><br>
+        <a href="{{ url_for('view') }}">View</a><br>
+        <a href="{{ url_for('load') }}">Load</a><br>
+        <a href="{{ url_for('model') }}">Models</a><br>
+        <a href="{{ url_for('predictions') }}">Predictions</a><br>
       </ul>    
       </div>
       <div class="col-sm-10 ">
       {% block content %}{% endblock %}
       </div>
     </div>
-
   </div>
 </body>
 </html>
